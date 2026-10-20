@@ -52,6 +52,13 @@ if (isBrowserProcess) {
     try { fs.writeFileSync(CONFIG_FILE(), JSON.stringify(win.getBounds())); } catch (_) {}
   }
 
+  // Throttled save for the frequent 'move' events during dragging.
+  let saveTimer = null;
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveTimer = null; saveBounds(); }, 250);
+  }
+
   function defaultBounds() {
     const wa = screen.getPrimaryDisplay().workArea;
     return {
@@ -91,7 +98,25 @@ if (isBrowserProcess) {
     win.loadFile(path.join(__dirname, 'web', 'index.html'));
 
     win.on('closed', () => { win = null; });
-    win.on('move', saveBounds); // remember position after dragging
+    win.on('move', scheduleSave); // throttle position writes while dragging
+
+    // Manual window dragging via the top handle (more reliable than
+    // -webkit-app-region when the handle is nested in a no-drag container).
+    let dragOffset = null;
+    ipcMain.on('dino:drag-start', () => {
+      if (!win) return;
+      const cursor = screen.getCursorScreenPoint();
+      const b = win.getBounds();
+      dragOffset = { dx: cursor.x - b.x, dy: cursor.y - b.y };
+    });
+    ipcMain.on('dino:drag-move', () => {
+      if (!win || !dragOffset) return;
+      const cursor = screen.getCursorScreenPoint();
+      win.setPosition(Math.round(cursor.x - dragOffset.dx), Math.round(cursor.y - dragOffset.dy));
+    });
+    ipcMain.on('dino:drag-end', () => { dragOffset = null; saveBounds(); });
+
+
   }
 
   function pushState() {

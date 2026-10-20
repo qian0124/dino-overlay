@@ -1,6 +1,10 @@
 /* Dino Overlay — 悬浮窗专用样式（在 index.css 之后加载，覆盖其布局）
  * 目标：Electron 透明窗 → 桌面 → 只有恐龙/障碍/地面浮在上层。
- * 布局：canvas 600×150 居中；四周透明边距作为 -webkit-app-region: drag 拖拽条。 */
+ * 布局要点：
+ *  - 外层用 flex 居中，游戏容器恒为 600×150，空闲与游戏中位置一致
+ *    （配合 index.js 里已禁用的街机模式，杜绝“恐龙跳中间 / 跑道被裁 / 分数丢失”）。
+ *  - 拖动只通过顶部“拖动基准块”完成，采用手动 IPC（见 main.js），不依赖
+ *    -webkit-app-region（在 no-drag 父容器内不可靠）。 */
 
 html, body {
   margin: 0;
@@ -11,7 +15,7 @@ html, body {
   overflow: hidden !important;          /* 不出现滚动条 */
 }
 
-/* 整个外层容器作为可拖拽区（透明边距即拖拽条）。 */
+/* 外层容器：铺满窗口、flex 居中。 */
 .offline .interstitial-wrapper,
 #main-frame-error {
   position: absolute !important;
@@ -21,37 +25,72 @@ html, body {
   max-width: none !important;
   margin: 0 !important;
   padding: 0 !important;                /* padding=0 → adjustDimensions 测得 canvas=600 */
-  -webkit-app-region: drag;             /* frameless 拖动 */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
   -webkit-user-select: none;
   user-select: none;
   background: transparent !important;
 }
 
-/* 游戏画布容器：居中、脱离拖拽区，让点击/键盘进入游戏。 */
+/* 游戏画布容器：作为 flex 项被稳定居中，位置全程不变。 */
 .offline .runner-container,
 .runner-container {
-  position: absolute !important;
-  top: 40px !important;                 /* 与主进程 MARGIN_TOP 对齐 */
-  left: 50% !important;
-  transform: translateX(-50%);
+  position: static !important;          /* 关键：不再用 absolute/transform，避免与街机缩放冲突 */
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
   width: 600px !important;              /* 覆盖 index.css 的 44px 初值 */
   height: 150px !important;
+  margin: 0 auto !important;
   overflow: visible !important;
-  -webkit-app-region: no-drag;          /* 游戏区不吃拖拽，点击可跳 */
 }
 
 /* canvas 本体。 */
 .runner-canvas {
   display: block;
   background: transparent !important;
-  -webkit-app-region: no-drag;
 }
 
-/* 原版 .controller 覆盖 100vw×100vh 且 z-index:1，会挡住透明边距的拖拽。 */
+/* 原版 .controller 覆盖 100vw×100vh，避免它吃掉点击。 */
 .controller {
   pointer-events: none !important;
   background: transparent !important;
 }
 
-/* 悬停在游戏区时给出轻微提示（可选、低干扰）。 */
+/* ---- 拖动基准块：顶部居中的小把手，只有它能移动整个窗口（手动 IPC 拖拽） ---- */
+.dino-drag-handle {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 110px;
+  height: 20px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(83, 83, 83, 0.55);
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: 20;
+}
+
+.dino-drag-handle:hover { opacity: 0.9; }
+.dino-drag-handle:active { cursor: grabbing; }
+
+/* 把手中间的“握柄”小横线，强化“可拖动”观感。 */
+.dino-drag-handle::before {
+  content: "";
+  width: 34px;
+  height: 3px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 5px 0 #fff, 0 -5px 0 #fff;
+}
+
 body.overlay { cursor: default; }

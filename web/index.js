@@ -205,7 +205,8 @@
      */
     Runner.keycodes = {
         JUMP: { '38': 1, '32': 1 },  // Up, spacebar
-        DUCK: { '40': 1 },  // Down
+        DUCK: { '40': 1, '17': 1 },  // Down, Ctrl
+
         RESTART: { '13': 1 }  // Enter
     };
 
@@ -847,31 +848,20 @@
         
         /**
          * Hides offline messaging for a fullscreen game only experience.
+         * NOTE (overlay): Arcade mode enlarges/centers the canvas to fill a
+         * full-screen Chrome tab. In a fixed 640x206 transparent window that
+         * transform re-centers the dino and clips the track + score, so we
+         * deliberately disable it and keep the canvas at a stable 600x150.
          */
         setArcadeMode() {
-            document.body.classList.add(Runner.classes.ARCADE_MODE);
-            this.setArcadeModeContainerScale();
+            return;
         },
 
         /**
          * Sets the scaling for arcade mode.
          */
         setArcadeModeContainerScale() {
-            const windowHeight = window.innerHeight;
-            const scaleHeight = windowHeight / this.dimensions.HEIGHT;
-            const scaleWidth = window.innerWidth / this.dimensions.WIDTH;
-            const scale = Math.max(1, Math.min(scaleHeight, scaleWidth));
-            const scaledCanvasHeight = this.dimensions.HEIGHT * scale;
-            // Positions the game container at 10% of the available vertical window
-            // height minus the game container height.
-            const translateY = Math.ceil(Math.max(0, (windowHeight - scaledCanvasHeight -
-                                                      Runner.config.ARCADE_MODE_INITIAL_TOP_POSITION) *
-                                                  Runner.config.ARCADE_MODE_TOP_POSITION_PERCENT)) *
-                  window.devicePixelRatio;
-
-            const cssScale = scale;
-            this.containerEl.style.transform =
-                'scale(' + cssScale + ') translateY(' + translateY + 'px)';
+            return;
         },
         
         /**
