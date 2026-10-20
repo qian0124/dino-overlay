@@ -28,7 +28,7 @@
     </div>
 
     <script>
-        // 悬浮窗控制：右键 → 原生操作菜单；Ctrl+Shift+H → 隐藏到托盘；Tab → 暂停/继续。
+        // 悬浮窗控制：右键 → 原生操作菜单；ESC → 退出；Ctrl+Shift+H → 隐藏到托盘；Tab → 暂停/继续。
         // 空格 / ↑ / Enter 交给 Runner 自己处理跳跃与重开。
         (function () {
             if (!window.dinoApi) return;
@@ -62,8 +62,14 @@
                 });
             }
 
-            // ---- 键盘：Tab 切换暂停；Ctrl+Shift+H 隐藏到托盘 ----
+            // ---- 键盘：ESC 一键退出；Tab 切换暂停；Ctrl+Shift+H 隐藏到托盘 ----
             document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' || e.keyCode === 27) {
+                    e.preventDefault();
+                    e.stopPropagation();   // 游戏引擎不认 ESC，这里双保险直接退出进程
+                    window.dinoApi.quit();
+                    return;
+                }
                 if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) {
                     e.preventDefault();
                     window.dinoApi.hide();

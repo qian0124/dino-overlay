@@ -23,9 +23,10 @@ npm run dist          # = electron-builder --win portable
 - **重开**：Enter，或死亡后再点画布。
 - **趴下 / 俯冲**：↓ 或 **Ctrl**（Ctrl + ↑/空格 会触发俯冲）。
 - **暂停 / 继续**：**Tab**。窗口失焦（Alt+Tab 到别的应用）会自动暂停；恢复需要主动按键或点画布，拖动窗口、右键都不会误恢复。
+- **退出**：**ESC** 一键退出（窗口有焦点时），或 `Ctrl+Q`（全局快捷键）。
 - **移动窗口**：拖顶部**小把手**（拖动基准块）。
 - **右键**：弹出原生操作菜单（置顶开关 / 隐藏到托盘 / 退出）。
-- **快捷键**：`Ctrl+Q` 退出，`Ctrl+Shift+H` 隐藏到托盘，`Ctrl+Shift+P` 切换置顶。
+- **快捷键**：`ESC` 一键退出（需窗口聚焦），`Ctrl+Q` 退出（全局，任意焦点下有效），`Ctrl+Shift+H` 隐藏到托盘，`Ctrl+Shift+P` 切换置顶。
 - 系统托盘常驻。
 
 ## 最高分持久化
@@ -45,6 +46,8 @@ npm run dist          # = electron-builder --win portable
 8. **`web/index.html` 顶部原为 `/* */` 注释在 `<!doctype>` 之前**，会让 CSP `<meta>` 落到 head 外；已改为规范结构。
 9. **拖动把手用手动 IPC**：`-webkit-app-region: drag` 嵌在 `no-drag` 父容器里命中不稳定；改成把手 mousedown → 主进程记录 `cursor - window` 偏移，mousemove 用 `screen.getCursorScreenPoint()` 实时 `setPosition`，并节流写位置记忆。
 10. **最高分持久化**：主进程读写 `userData/highscore.json`，preload 用 `ipcRenderer.sendSync('dino:hi-get')` 一次性拉取、`send('dino:hi-set', v)` 增量落盘；渲染进程在 `window.runner` 就绪后（`distanceMeter` 出现）给实例的 `gameOver` 挂 hook。文件在**用户 AppData**、**不在 exe** 里，所以拷贝 exe 给朋友不会带上你的记录。
+11. **ESC 一键退出**：渲染层捕获阶段 `keydown` 监听里拦 `Escape`（keyCode 27），`preventDefault + stopPropagation` 后走已有 IPC 通道 `dino:quit → app.quit()`。引擎本身不使用 ESC（JUMP/DUCK/RESTART 键表里都没有 27），无冲突。注意 ESC 需**窗口聚焦**；后台退出仍走全局 `Ctrl+Q`。
+12. **打包 exe 从 agent/自动化 shell 启动会“秒退”**：若父进程环境带 `ELECTRON_RUN_AS_NODE=1`，Electron 应用（含 portable 壳）会静默以纯 Node 运行、退出码 0，看起来像闪退。先清掉该变量再测；真人双击不受影响。
 
 ## 版本约定
 - `package.json` 的 `version` 是唯一真相；产物名 `DinoOverlay-${version}-portable.exe` 自动带版本号，**不会重名覆盖**。
