@@ -28,22 +28,18 @@
     </div>
 
     <script>
-        // 悬浮窗控制：右键 → 原生操作菜单；Ctrl+Shift+H → 隐藏到托盘。
-        // 不拦截 空格/↑/Enter，保证游戏可玩、可重开。
+        // 悬浮窗控制：右键 → 原生操作菜单；Ctrl+Shift+H → 隐藏到托盘；Tab → 暂停/继续。
+        // 空格 / ↑ / Enter 交给 Runner 自己处理跳跃与重开。
         (function () {
             if (!window.dinoApi) return;
+
+            // ---- 右键：原生操作菜单（置顶/隐藏/退出） ----
             document.addEventListener('contextmenu', function (e) {
                 e.preventDefault();
                 window.dinoApi.showContextMenu();
             });
-            document.addEventListener('keydown', function (e) {
-                if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) {
-                    e.preventDefault();
-                    window.dinoApi.hide();
-                }
-            });
 
-            // 拖动基准块：手动 IPC 拖拽（比 no-drag 父容器内的 app-region 更可靠）。
+            // ---- 拖动基准块：手动 IPC 拖拽（比 no-drag 父容器内的 app-region 更可靠） ----
             var handle = document.querySelector('.dino-drag-handle');
             if (handle) {
                 var dragging = false;
@@ -65,8 +61,66 @@
                     document.addEventListener('mouseup', onUp, true);
                 });
             }
-        })();
 
+            // ---- 键盘：Tab 切换暂停；Ctrl+Shift+H 隐藏到托盘 ----
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) {
+                    e.preventDefault();
+                    window.dinoApi.hide();
+                    return;
+                }
+                if (e.key === 'Tab' || e.keyCode === 9) {
+                    e.preventDefault();                       // 阻止默认焦点切换
+                    var r = window.runner;
+                    if (!r || r.crashed) return;              // 死亡后 Tab 不复活，用 Enter 重开
+                    if (r.playing) r.stop();
+                    else r.play();
+                }
+            }, true);
+
+            // ---- 点击画布：若因窗口失焦自动暂停，显式恢复（拖动/右键不再触发） ----
+            document.addEventListener('mousedown', function (e) {
+                var r = window.runner;
+                if (!r || !r.paused || r.crashed) return;
+                if (r.canvas && r.canvas.contains(e.target)) {
+                    r.play();
+                }
+            });
+
+            // ---- 最高分持久化：读写 userData/highscore.json ----
+            // Runner 定义在 IIFE 内外部拿不到，等 window.runner 就绪后给实例打补丁。
+            // 引擎自己是单例，实例级 hook 就够。
+            function applyHighScore() {
+                var r = window.runner;
+                if (!r || !r.distanceMeter) return false;
+                try {
+                    var saved = window.dinoApi.getHighScore();
+                    if (saved > 0 && saved > r.highestScore) {
+                        r.highestScore = saved;
+                        r.distanceMeter.setHighScore(saved);
+                    }
+                } catch (_) {}
+                if (!r.__hiHooked) {
+                    var origGameOver = r.gameOver.bind(r);
+                    r.gameOver = function () {
+                        var ret = origGameOver();
+                        try {
+                            if (r.highestScore > 0) window.dinoApi.saveHighScore(r.highestScore);
+                        } catch (_) {}
+                        return ret;
+                    };
+                    r.__hiHooked = true;
+                }
+                return true;
+            }
+            // init() 是异步的（雪碧图加载后触发），轮询直到 distanceMeter 就绪。
+            var tries = 0;
+            (function poll() {
+                if (applyHighScore()) return;
+                if (++tries > 150) return;              // ~4.5s 兜底
+                setTimeout(poll, 30);
+            })();
+        })();
     </script>
 </body>
 

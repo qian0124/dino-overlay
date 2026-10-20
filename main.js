@@ -38,6 +38,26 @@ if (isBrowserProcess) {
   const WIN_H = CANVAS_H + MARGIN_TOP + MARGIN_BOTTOM; // 206
 
   const CONFIG_FILE = () => path.join(app.getPath('userData'), 'overlay-config.json');
+  // Per-machine, per-user. NOT bundled inside the exe — so sharing the exe
+  // with a friend never carries the high score over. See HANDOFF §6.
+  const HIGHSCORE_FILE = () => path.join(app.getPath('userData'), 'highscore.json');
+
+  function readHighScore() {
+    try {
+      const v = Number(JSON.parse(fs.readFileSync(HIGHSCORE_FILE(), 'utf8')).hi);
+      return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    } catch (_) { return 0; }
+  }
+
+  function writeHighScore(v) {
+    try {
+      const cur = readHighScore();
+      const next = Math.max(cur, Math.floor(Number(v) || 0));
+      if (next === cur) return; // no downgrade, no redundant write
+      fs.writeFileSync(HIGHSCORE_FILE(), JSON.stringify({ hi: next }));
+    } catch (_) { /* ignore */ }
+  }
+
 
   function loadBounds() {
     try {
@@ -158,6 +178,10 @@ if (isBrowserProcess) {
     if (win) { win.setAlwaysOnTop(!win.isAlwaysOnTop(), 'screen-saver'); pushState(); }
   });
   ipcMain.on('dino:context-menu', () => { if (win) buildMenu().popup({ window: win }); });
+
+  // High-score persistence (see HIGHSCORE_FILE above).
+  ipcMain.on('dino:hi-get', (e) => { e.returnValue = readHighScore(); });      // sync, boot-once
+  ipcMain.on('dino:hi-set', (_e, v) => { writeHighScore(v); });                 // async, on gameOver
 
   // ---- single instance ----
   const gotLock = app.requestSingleInstanceLock();

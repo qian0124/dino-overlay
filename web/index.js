@@ -867,13 +867,20 @@
         /**
          * Pause the game if the tab is not in focus.
          */
+        /**
+         * Pause the game if the tab is not in focus.
+         *
+         * NOTE (overlay): We intentionally only pause on blur, never auto-resume
+         * on refocus. The original Chrome behaviour re-started the game whenever
+         * the tab regained focus, which for us means dragging or right-clicking
+         * the top handle (which refocuses the OS window) would silently resume
+         * the game. Manual resume is now: press Space / Up / Enter / Tab, or
+         * click the canvas — see index.html for those bindings.
+         */
         onVisibilityChange: function (e) {
             if (document.hidden || document.webkitHidden || e.type == 'blur' ||
                 document.visibilityState != 'visible') {
                 this.stop();
-            } else if (!this.crashed) {
-                this.tRex.reset();
-                this.play();
             }
         },
 

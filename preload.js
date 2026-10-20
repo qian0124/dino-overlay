@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('dinoApi', {
   startDrag: () => ipcRenderer.send('dino:drag-start'),
   dragMove: () => ipcRenderer.send('dino:drag-move'),
   endDrag: () => ipcRenderer.send('dino:drag-end'),
+  // Per-machine high score (stored under userData, never bundled with the exe).
+  getHighScore: () => ipcRenderer.sendSync('dino:hi-get') || 0,
+  saveHighScore: (v) => ipcRenderer.send('dino:hi-set', v),
 });
