@@ -1,0 +1,40 @@
+{
+  "name": "dino-overlay",
+  "productName": "Dino Overlay",
+  "version": "1.0.0",
+  "description": "Chrome 断网小恐龙透明悬浮桌宠（Electron 封装，透明无边框置顶窗，不依赖浏览器）",
+  "author": "QwenWork",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.qwenwork.dino-overlay",
+    "productName": "DinoOverlay",
+    "directories": {
+      "output": "../_build/dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "web/**/*"
+    ],
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "DinoOverlay-${version}-portable.${ext}"
+    }
+  }
+}
