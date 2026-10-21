@@ -1,7 +1,7 @@
 {
   "name": "dino-overlay",
   "productName": "Dino Overlay",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Chrome 断网小恐龙透明悬浮桌宠（Electron 封装，透明无边框置顶窗，不依赖浏览器）",
   "author": "QwenWork",
   "license": "MIT",
