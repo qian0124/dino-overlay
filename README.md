@@ -37,43 +37,6 @@ npm run dist          # = electron-builder --win portable
 - 想清空：手动删这个 json 文件即可。
 - 引擎只在 `gameOver()` 里把新记录推给主进程，写盘幂等：只有比当前记录更高才落盘，不会因异常回退。
 
-## 关键实现点（踩坑记录）
-1. **主进程判别**：`electron.exe .` 直启时主进程 `process.type === 'browser'`（非空串）；打包运行则是 `''`。用 `!process.type || process.type === 'browser'` 守卫，避免 GPU/工具子进程加载 main.js 时因 `app` undefined 崩溃。
-2. **透明窗**：`transparent + frame:false + hasShadow:false + skipTaskbar + backgroundColor:'#00000000'` + `setAlwaysOnTop(true,'screen-saver')`，并 `app.disableHardwareAcceleration()` 降低黑块概率。
-3. **画布尺寸**：`overlay.css` 把 `.interstitial-wrapper` 用 flex 稳定居中、`padding:0`，引擎 `adjustDimensions()` 据此测得 canvas=600×150；顶部有独立的**拖动把手**。
-4. **禁用 Arcade Mode**：引擎 `startGame()` 会调用 `setArcadeMode()` 给容器加 `transform:scale()`，在 Chrome 全屏是必要的，但把画布塞进固定小窗会把恐龙推到中间、跑道被裁、右上角分数丢失。已在 `web/index.js` 里把 `setArcadeMode` / `setArcadeModeContainerScale` 改成 no-op。
-5. **暂停语义**：`Runner.stop()` 是真的 `cancelAnimationFrame + paused=true`（画面完全冻结），不是视觉遮罩。原本引擎失焦自动 `stop()`、聚焦自动 `play()`；聚焦自动 play 会让拖动窗口 / 右键弹菜单误恢复游戏。改成**只暂停不自动恢复**，恢复交给 Tab / 空格 / ↑ / 点画布。
-6. **改键 DUCK 加 Ctrl**：`Runner.keycodes.DUCK` 从 `{ '40': 1 }` 扩到 `{ '40': 1, '17': 1 }`；引擎的 keydown/keyup 处理已经能识别 Ctrl 复合键。
-7. **游戏初始化空指针**：离线页缺少 `.icon` 元素，`init()` 里 `document.querySelector('.icon').style` 会抛 `null`；已在 `web/index.js` 加空值保护。
-8. **`web/index.html` 顶部原为 `/* */` 注释在 `<!doctype>` 之前**，会让 CSP `<meta>` 落到 head 外；已改为规范结构。
-9. **拖动把手用手动 IPC**：`-webkit-app-region: drag` 嵌在 `no-drag` 父容器里命中不稳定；改成把手 mousedown → 主进程记录 `cursor - window` 偏移，mousemove 用 `screen.getCursorScreenPoint()` 实时 `setPosition`，并节流写位置记忆。
-10. **最高分持久化**：主进程读写 `userData/highscore.json`，preload 用 `ipcRenderer.sendSync('dino:hi-get')` 一次性拉取、`send('dino:hi-set', v)` 增量落盘；渲染进程在 `window.runner` 就绪后（`distanceMeter` 出现）给实例的 `gameOver` 挂 hook。文件在**用户 AppData**、**不在 exe** 里，所以拷贝 exe 给朋友不会带上你的记录。
-11. **ESC 一键退出**：渲染层捕获阶段 `keydown` 监听里拦 `Escape`（keyCode 27），`preventDefault + stopPropagation` 后走已有 IPC 通道 `dino:quit → app.quit()`。引擎本身不使用 ESC（JUMP/DUCK/RESTART 键表里都没有 27），无冲突。注意 ESC 需**窗口聚焦**；后台退出仍走全局 `Ctrl+Q`。
-12. **打包 exe 从 agent/自动化 shell 启动会“秒退”**：若父进程环境带 `ELECTRON_RUN_AS_NODE=1`，Electron 应用（含 portable 壳）会静默以纯 Node 运行、退出码 0，看起来像闪退。先清掉该变量再测；真人双击不受影响。
-13. **颜色深浅（不透明度）**：菜单里用一组 `type:'radio'` 档位（20/40/60/80/100%，默认 80%）。选中 → 主进程写 `userData/opacity.json`（独立文件，避免被 `saveBounds()` 覆盖），再 `webContents.send('dino:set-opacity', v)` 通知渲染层设 `.runner-container` 的 `style.opacity`，并用 `tray.setContextMenu(buildMenu())` 刷新托盘菜单的勾选。`index.html` 启动时 `sendSync('dino:opacity-get')` 拉初始值；`.runner-container` 由引擎异步创建，故 `applyOpacityDom()` 幂等、并在高轮询里重试直到容器出现。只淡恐龙画面，不影响顶部拖动把手。右键与托盘两处菜单共用 `buildMenu()`，改一处即两处生效。
-
-## Tauri 版（档3，v1.2.2）— 约 3.2MB
-为把体积从 Electron 的 61.7MB 压到 MB 级，新增 **Tauri v2** 壳（`src-tauri/`），**完全复用 `web/`（游戏逻辑零改动）**：Rust 侧重写窗口 / 托盘 / 持久化，前端由编译期注入的 `initialization_script` 提供 `window.dinoApi`（映射到 Tauri `invoke`/`event`），因此 `web/index.html` 里那段桥接脚本原样可用。同步取值（不透明度、最高分）由 Rust 在启动时读文件后经 `window.__DINO_BOOT__` 注入，绕开 Tauri 无同步 IPC 的限制。
-
-构建（需本机 Rust + VS Build Tools C++ 工作负载，见下）：
-```powershell
-$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-cd src-tauri
-cargo build --release          # check 同理：cargo check --release
-```
-产物：`src-tauri/target/release/dino-overlay.exe`（**单文件**，前端已编译期内嵌，**不依赖同目录 web/ 也不依赖旁挂的 `dino_overlay_lib.dll`**），复制到 `outputs/DinoOverlay-1.2.2-tauri-portable.exe`。实测 **3.24 MB**（≈ Electron 版 1/19）。
-
-- 功能对齐：透明无边框置顶（TOPMOST）窗、顶部把手拖拽（映射到 `start_dragging`）、右键与托盘共用同一原生菜单（保持/取消置顶 · 颜色深浅 20/40/60/80/100% · 隐藏到托盘 · 退出）、`ESC` 退出（需窗口聚焦）、全局 `Ctrl+Q` 退出、全局 `Ctrl+Shift+P` 切置顶、单实例、持久化在 `%APPDATA%\com.qwenwork.dino-overlay\{overlay-config,opacity,highscore}.json`（与 Electron 的 `Dino Overlay` 目录互不干扰）。
-- 与 Electron 的差异：置顶用 `always_on_top`（TOPMOST 级），非 Electron 的 `screen-saver` 级 z-order；其余一致。
-
-**构建前提（根因纠正）**：本机原本**没有** MSVC 链接器 / Windows SDK（`HANDOFF` 里“VS C++ 已就位”的假设是错的）。Rust 的 `x86_64-pc-windows-msvc` 目标必须先有 `link.exe` + Windows SDK。已用 `winget install Microsoft.VisualStudio.2022.BuildTools --override "...--add Microsoft.VisualStudio.Workload.VCTools;includeRecommended"` 补齐（SDK 10.0.26100 + MSVC 14.44）。Rust 经 `rustup`（`rsproxy.cn` 镜像），crates 亦走 rsproxy（见 `~/.cargo/config.toml`）。另：`tauri-build` 在 Windows 上**强制**需要 `src-tauri/icons/icon.ico`（即使 `bundle.active:false`）。
-
-**验证坑**：GDI `CopyFromScreen`/BitBlt 抓不到 DWM 合成的 WebView2 透明窗（截出来是均匀色，非真实画面），所以渲染判定以**真人屏幕观察 + 枚举到 `vis=True 640×206` 顶层窗**为准，别据截图像素判失败。
-
-## 版本约定
-- `package.json` 的 `version` 是唯一真相；产物名 `DinoOverlay-${version}-portable.exe` 自动带版本号，**不会重名覆盖**。
-- 语义化：修 bug 递增 patch (1.0.x)，加功能递增 minor (1.x.0)。
-- 每次合入 main 打一个 tag（`v1.0.0` / `v1.0.1` / `v1.1.0` ...），回滚走 `git checkout <tag> && npm run dist`，而不是留旧 exe。
 
 ## 目录
 ```
