@@ -93,6 +93,21 @@
                 }
             });
 
+            // ---- 颜色深浅（画面不透明度）：淡的是恐龙/障碍/地面，拖动把手不受影响 ----
+            // .runner-container 由引擎动态创建，可能尚未出现，故 apply 幂等 + 轮询里重试。
+            var currentOpacity = 0.8;
+            function applyOpacityDom() {
+                var el = document.querySelector('.runner-container');
+                if (el) el.style.opacity = currentOpacity;
+                return !!el;
+            }
+            try { currentOpacity = window.dinoApi.getOpacity(); } catch (_) {}
+            applyOpacityDom();
+            window.dinoApi.onOpacity(function (v) {
+                currentOpacity = v;
+                applyOpacityDom();
+            });
+
             // ---- 最高分持久化：读写 userData/highscore.json ----
             // Runner 定义在 IIFE 内外部拿不到，等 window.runner 就绪后给实例打补丁。
             // 引擎自己是单例，实例级 hook 就够。
@@ -117,6 +132,7 @@
                     };
                     r.__hiHooked = true;
                 }
+                applyOpacityDom();
                 return true;
             }
             // init() 是异步的（雪碧图加载后触发），轮询直到 distanceMeter 就绪。

@@ -42,6 +42,27 @@ if (isBrowserProcess) {
   // with a friend never carries the high score over. See HANDOFF §6.
   const HIGHSCORE_FILE = () => path.join(app.getPath('userData'), 'highscore.json');
 
+  // Per-machine, per-user "color depth" (画面不透明度). 0.10 ~ 1.00, default 0.80.
+  // Stored separately from overlay-config.json so saveBounds() never clobbers it.
+  const OPACITY_FILE = () => path.join(app.getPath('userData'), 'opacity.json');
+  const OPACITY_DEFAULT = 0.8;
+  const OPACITY_STEPS = [0.2, 0.4, 0.6, 0.8, 1.0];
+
+  function readOpacity() {
+    try {
+      const v = Number(JSON.parse(fs.readFileSync(OPACITY_FILE(), 'utf8')).opacity);
+      if (Number.isFinite(v)) return Math.min(1, Math.max(0.1, v));
+    } catch (_) { /* first run */ }
+    return OPACITY_DEFAULT;
+  }
+
+  function writeOpacity(v) {
+    try {
+      const n = Math.min(1, Math.max(0.1, Number(v) || OPACITY_DEFAULT));
+      fs.writeFileSync(OPACITY_FILE(), JSON.stringify({ opacity: n }));
+    } catch (_) { /* ignore */ }
+  }
+
   function readHighScore() {
     try {
       const v = Number(JSON.parse(fs.readFileSync(HIGHSCORE_FILE(), 'utf8')).hi);
@@ -143,12 +164,31 @@ if (isBrowserProcess) {
     if (win) win.webContents.send('dino:state', { onTop: win.isAlwaysOnTop() });
   }
 
+  function setOpacity(v) {
+    const n = Math.min(1, Math.max(0.1, Number(v)));
+    writeOpacity(n);
+    if (win) win.webContents.send('dino:set-opacity', n);
+    if (tray) tray.setContextMenu(buildMenu()); // refresh radio check in the tray menu
+  }
+
   function buildMenu() {
     const onTop = !!(win && win.isAlwaysOnTop());
+    const cur = readOpacity();
     return Menu.buildFromTemplate([
       {
         label: onTop ? '取消置顶' : '保持置顶',
         click: () => { if (win) { win.setAlwaysOnTop(!onTop, 'screen-saver'); pushState(); } },
+      },
+      {
+        label: '颜色深浅',
+        submenu: OPACITY_STEPS.map(function (v) {
+          return {
+            label: Math.round(v * 100) + '%',
+            type: 'radio',
+            checked: Math.abs(cur - v) < 0.001,
+            click: function () { setOpacity(v); },
+          };
+        }),
       },
       { label: '隐藏到托盘', click: () => { if (win) win.hide(); } },
       { type: 'separator' },
@@ -182,6 +222,9 @@ if (isBrowserProcess) {
   // High-score persistence (see HIGHSCORE_FILE above).
   ipcMain.on('dino:hi-get', (e) => { e.returnValue = readHighScore(); });      // sync, boot-once
   ipcMain.on('dino:hi-set', (_e, v) => { writeHighScore(v); });                 // async, on gameOver
+
+  // Color-depth (opacity) persistence. Renderer pulls the saved value once at boot.
+  ipcMain.on('dino:opacity-get', (e) => { e.returnValue = readOpacity(); });
 
   // ---- single instance ----
   const gotLock = app.requestSingleInstanceLock();
