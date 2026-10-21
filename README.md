@@ -17,6 +17,7 @@ npm run dist          # = electron-builder --win portable
 产物：`../\_build\dist\DinoOverlay-<version>-portable.exe`（单文件免安装，双击即用）。
 - `package.json` 里 `"electronDist": "node_modules/electron/dist"` 让 electron-builder 复用本机已缓存的 Electron，避免再次从 GitHub 下载。
 - Electron 版本固定为 **33.4.11**（win32-x64）。
+- **打包瘦身（v1.2.1）**：`afterPack.js` 在打包前裁剪 Electron 运行时——locales 只留 `zh-CN`/`en-US`（删其余 ~53 个 .pak）、移除 `LICENSES.chromium.html`、`vk_swiftshader*`、多余的 `default_app.asar`，体积明显下降。故意保留 `ffmpeg.dll`（恐龙音效是 base64 mp3，靠它解码）与 GPU 相关 dll（渲染稳定性）。若某次更新后 Electron 升级导致裁剪报错，删掉 `package.json` 里的 `"afterPack"` 一行即可回到全量打包。
 
 ## 操作方式
 - **开始 / 跳**：点画布任意处，或按 空格 / ↑。
